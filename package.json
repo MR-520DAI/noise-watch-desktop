@@ -5,7 +5,8 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "node scripts/dev.cjs",
+    "dev:vite": "vite --strictPort",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

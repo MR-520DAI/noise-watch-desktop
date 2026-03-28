@@ -71,7 +71,8 @@ function createWindow() {
   })
 
   if (isDev) {
-    window.loadURL('http://localhost:5173')
+    const devUrl = process.env.ELECTRON_RENDERER_URL || 'http://localhost:5173'
+    window.loadURL(devUrl)
     window.webContents.openDevTools({ mode: 'detach' })
     return
   }
