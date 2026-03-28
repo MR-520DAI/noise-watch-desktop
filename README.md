@@ -1,73 +1,105 @@
-# React + TypeScript + Vite
+# 正反馈楼上楼下好邻居（Noise Watch Desktop）
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+这是一个跨平台桌面应用（Windows / macOS），用于：
 
-Currently, two official plugins are available:
+- 选择麦克风输入设备并实时监听
+- 选择监听频段：低频 / 中频 / 高频
+- 按“阈值 + 次数 + 时间窗口 + 冷却时间”的规则进行事件判定
+- 触发后在**本机**播放提醒音（你自己选择音频文件）
+- 运行过程中实时写入本地 JSON
+- 每 5 分钟自动导出并覆盖一份 CSV（便于后续查看/取证）
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> 说明：本项目仅用于本机提醒与记录。
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 开发环境要求
 
-## Expanding the ESLint configuration
+- Node.js（建议 18+，你当前环境已可用）
+- macOS / Windows
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 安装依赖
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+在项目根目录执行：
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 开发模式启动（推荐）
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+会打开 Electron 窗口。
+
+首次启动可能会弹出系统权限请求（麦克风），请选择允许。
+
+---
+
+## 打包发布（生成安装包）
+
+### macOS / Windows 打包
+
+```bash
+npm run dist
+```
+
+打包完成后会在 `dist/` 下生成：
+
+- macOS：`dist/*.dmg` 以及 `dist/mac-*/xxx.app`
+- Windows：`dist/*.exe`（在 Windows 上打包时生成）
+
+---
+
+## 为什么我“看不到 app”？
+
+如果你之前打过包，后来又运行了 `npm run build`，Vite 会清理输出目录，导致打包产物（.app/.dmg）被覆盖/删除。
+
+本项目已做了调整：
+
+- 前端构建输出到：`dist/renderer/`
+- 安装包输出到：`dist/`
+
+所以之后再运行 `npm run build` 不会把 `.dmg/.app` 删掉。
+
+---
+
+## 本地数据保存位置
+
+应用运行时会写到系统的 `userData` 目录（Electron 标准路径）。
+
+- 实时 JSON（覆盖写）：`events/latest-events.json`
+- 每 5 分钟 CSV（覆盖写）：`exports/latest-events.csv`
+
+在界面中也会显示 JSON/CSV 实际文件路径。
+
+---
+
+## 常见问题
+
+### 1）macOS 提示“无法打开/来自未知开发者”
+
+这是未签名应用的常见提示。按这个路径处理：
+
+- 系统设置 → 隐私与安全性
+- 找到被拦截的应用提示
+- 点击“仍要打开”
+
+### 2）监听不到设备/设备名称为空
+
+浏览器/系统有时需要先获取一次麦克风权限，设备 label 才会显示完整。
+
+---
+
+## 目录结构（简化）
+
+- `electron/`：Electron 主进程与 preload
+- `src/`：React UI + 监听/判定逻辑
+- `dist/renderer/`：前端构建产物
+- `dist/`：electron-builder 打包输出
