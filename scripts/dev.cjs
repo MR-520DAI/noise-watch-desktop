@@ -21,7 +21,9 @@ function resolveBinFromPackage(pkgName, relativeBinPath) {
 }
 
 async function main() {
-  const port = process.env.VITE_PORT || '5173'
+  // Prefer the user's configured port, but fall back to a less common port
+  // to avoid frequent conflicts with other Vite projects.
+  const port = process.env.VITE_PORT || '5174'
   const url = `http://localhost:${port}`
   const viteCli = resolveBinFromPackage('vite', 'bin/vite.js')
   const electronCli = resolveBinFromPackage('electron', 'cli.js')
