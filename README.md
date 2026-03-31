@@ -11,7 +11,7 @@
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8eda?style=for-the-badge)](https://github.com/learner20230724/noise-watch-desktop/releases/tag/v1.0.0)
 [![License](https://img.shields.io/github/license/learner20230724/noise-watch-desktop?style=for-the-badge)](./LICENSE)
 
-[下载 Windows 版](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.0/%E6%AD%A3%E5%8F%8D%E9%A6%88%E6%A5%BC%E4%B8%8A%E6%A5%BC%E4%B8%8B%E5%A5%BD%E9%82%BB%E5%B1%85%20Setup%201.0.0.exe) · macOS 安装包稍后补充 · [查看 Releases](https://github.com/learner20230724/noise-watch-desktop/releases/tag/v1.0.0)
+[下载 Windows 版](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.0/noise-watch-desktop-Setup-1.0.0.exe) · macOS 安装包稍后补充 · [查看 Releases](https://github.com/learner20230724/noise-watch-desktop/releases/tag/v1.0.0)
 
 </div>
 
@@ -45,7 +45,7 @@
 
 | 平台 | 类型 | 状态 | 下载 |
 | --- | --- | --- | --- |
-| Windows x64 | NSIS 安装包 | `v1.0.0` 已可直接下载安装 | [正反馈楼上楼下好邻居 Setup 1.0.0.exe](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.0/%E6%AD%A3%E5%8F%8D%E9%A6%88%E6%A5%BC%E4%B8%8A%E6%A5%BC%E4%B8%8B%E5%A5%BD%E9%82%BB%E5%B1%85%20Setup%201.0.0.exe) |
+| Windows x64 | NSIS 安装包 | `v1.0.0` 已可直接下载安装 | [noise-watch-desktop-Setup-1.0.0.exe](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.0/noise-watch-desktop-Setup-1.0.0.exe) |
 | macOS arm64 | DMG 安装包 | 本次 Release 暂未附带，稍后补充 | — |
 
 ### 当前发布说明
