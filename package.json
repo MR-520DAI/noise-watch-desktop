@@ -1,7 +1,7 @@
 {
   "name": "noise-watch-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "噪音监测应用",
   "author": "learner20230724",
   "type": "module",
@@ -59,7 +59,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/webview2-install.nsh"
     }
   }
 }

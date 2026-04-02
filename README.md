@@ -11,7 +11,7 @@
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8eda?style=for-the-badge)](https://github.com/learner20230724/noise-watch-desktop/releases)
 [![License](https://img.shields.io/github/license/learner20230724/noise-watch-desktop?style=for-the-badge)](./LICENSE)
 
-[下载 Windows 版](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.0/noise-watch-desktop-Setup-1.0.0.exe) · [Windows 10 测试版（修复启动问题）](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.2-win10-test/noise-watch-desktop-Setup-1.0.0-Win10-test.exe) · [macOS](https://github.com/learner20230724/noise-watch-desktop/releases/tag/v1.0.1) · [查看 Releases](https://github.com/learner20230724/noise-watch-desktop/releases)
+[下载 Windows 版](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.0/noise-watch-desktop-Setup-1.0.0.exe) · [Windows 10 测试版（内置WebView2自动安装，修复闪退）](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.2-win10-test/noise-watch-desktop-Setup-1.0.2-Win10-test.exe) · [macOS](https://github.com/learner20230724/noise-watch-desktop/releases/tag/v1.0.1) · [查看 Releases](https://github.com/learner20230724/noise-watch-desktop/releases)
 
 </div>
 
@@ -46,12 +46,12 @@
 | 平台 | 类型 | 状态 | 下载 |
 | --- | --- | --- | --- |
 | Windows x64 | NSIS 安装包 | `v1.0.0` 稳定版 | [noise-watch-desktop-Setup-1.0.0.exe](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.0/noise-watch-desktop-Setup-1.0.0.exe) |
-| Windows x64 | NSIS 安装包 | `v1.0.2` Win10 测试版（修复 Win10 静默启动问题） | [noise-watch-desktop-Setup-1.0.0-Win10-test.exe](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.2-win10-test/noise-watch-desktop-Setup-1.0.0-Win10-test.exe) |
+| Windows x64 | NSIS 安装包 | `v1.0.2` Win10 测试版（内置WebView2自动安装，修复闪退） | [noise-watch-desktop-Setup-1.0.2-Win10-test.exe](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.2-win10-test/noise-watch-desktop-Setup-1.0.2-Win10-test.exe) |
 | macOS arm64 | DMG 安装包 | `v1.0.1` | [NoiseWatch-1.0.1-arm64.dmg](https://github.com/learner20230724/noise-watch-desktop/releases/download/v1.0.1/NoiseWatch-1.0.1-arm64.dmg) |
 
 ### 系统要求
 
-**Windows**：Windows 10/11 x64，安装时需要管理员权限。如安装后双击无反应，请确保已安装 [Visual C++ Redistributable 2015-2022 (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)。安装时如遇 SmartScreen 拦截，请点击"仍要运行"。
+**Windows**：Windows 10/11 x64，安装时需要管理员权限。安装程序会自动安装 WebView2 运行时（如系统已有则跳过）。如遇 SmartScreen 拦截，请点击"仍要运行"。
 
 ---
 
