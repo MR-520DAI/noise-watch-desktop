@@ -148,7 +148,7 @@
 .devicePanel,
 .audioPanel {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 12px;
   align-items: center;
 }
