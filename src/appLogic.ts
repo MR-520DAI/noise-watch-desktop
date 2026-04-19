@@ -26,6 +26,7 @@ export function formatElapsed(totalSeconds: number) {
 export function defaultSettings(): MonitoringSettings {
   return {
     inputDeviceId: 'default',
+    outputDeviceId: 'default',
     alertAudioName: '',
     alertAudioPath: '',
     alertVolumePercent: 100,
@@ -71,6 +72,13 @@ export async function listAudioInputDevices(): Promise<DeviceOption[]> {
   const devices = await navigator.mediaDevices.enumerateDevices()
   return devices
     .filter((d) => d.kind === 'audioinput')
+    .map((d) => ({ id: d.deviceId, label: deviceLabel(d) }))
+}
+
+export async function listAudioOutputDevices(): Promise<DeviceOption[]> {
+  const devices = await navigator.mediaDevices.enumerateDevices()
+  return devices
+    .filter((d) => d.kind === 'audiooutput')
     .map((d) => ({ id: d.deviceId, label: deviceLabel(d) }))
 }
 

@@ -8,6 +8,7 @@ import {
   defaultSettings,
   formatElapsed,
   listAudioInputDevices,
+  listAudioOutputDevices,
   selectedBandDb,
   alertGainFromPercent,
 } from './appLogic'
@@ -19,9 +20,13 @@ import { SelectRow } from './components/SelectRow'
 import { SliderRow } from './components/SliderRow'
 import type { DeviceOption, EventLog, FrequencyBand, MonitoringSettings, MonitoringStats } from './types'
 
-const fallbackDevices: DeviceOption[] = [
+const fallbackInputDevices: DeviceOption[] = [
   { id: 'default', label: '[Default] System Microphone' },
   { id: 'usb-mic', label: '[USB] Wireless Microphone RX' },
+]
+
+const fallbackOutputDevices: DeviceOption[] = [
+  { id: 'default', label: '[Default] System Output' },
 ]
 
 const maxLogs = 200
@@ -43,7 +48,8 @@ type AlertAudioSelection = {
 
 function App() {
   const [settings, setSettings] = useState<MonitoringSettings>(defaultSettings)
-  const [devices, setDevices] = useState<DeviceOption[]>(fallbackDevices)
+  const [inputDevices, setInputDevices] = useState<DeviceOption[]>(fallbackInputDevices)
+  const [outputDevices, setOutputDevices] = useState<DeviceOption[]>(fallbackOutputDevices)
   const [stats, setStats] = useState<MonitoringStats>(() => createInitialStats('zh'))
   const [logs, setLogs] = useState<EventLog[]>([])
   const [isMonitoring, setIsMonitoring] = useState(false)
@@ -248,6 +254,19 @@ function App() {
         alertAudioGainRef.current = gain
         alertAudioFilePathRef.current = selection.filePath
         alertAudioUrlRef.current = selection.audioUrl
+
+        // Set output device if selected
+        const deviceId = settingsRef.current.outputDeviceId
+        if (deviceId && deviceId !== 'default' && 'setSinkId' in audio) {
+          (audio as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId(deviceId)
+            .catch(() => { /* Ignore errors */ })
+        }
+
+        // Set output device for AudioContext if supported
+        if (deviceId && deviceId !== 'default' && 'setSinkId' in context) {
+          (context as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId(deviceId)
+            .catch(() => { /* Ignore errors */ })
+        }
       } catch (error) {
         audio.pause()
         audio.removeAttribute('src')
@@ -283,6 +302,13 @@ function App() {
       gain.connect(context.destination)
       alertAudioContextRef.current = context
       alertAudioGainRef.current = gain
+    }
+
+    const deviceId = settingsRef.current.outputDeviceId
+    // Set output device for AudioContext if supported
+    if (deviceId && deviceId !== 'default' && 'setSinkId' in context) {
+      (context as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId(deviceId)
+        .catch(() => { /* Ignore errors */ })
     }
 
     stopDefaultAlertTone()
@@ -355,15 +381,24 @@ function App() {
   async function refreshDevices() {
     try {
       const inputs = await listAudioInputDevices()
+      const outputs = await listAudioOutputDevices()
       if (inputs.length > 0) {
-        setDevices(inputs)
+        setInputDevices(inputs)
         setSettings((prev) => ({
           ...prev,
           inputDeviceId: inputs.some((d) => d.id === prev.inputDeviceId) ? prev.inputDeviceId : inputs[0].id,
         }))
       }
+      if (outputs.length > 0) {
+        setOutputDevices(outputs)
+        setSettings((prev) => ({
+          ...prev,
+          outputDeviceId: outputs.some((d) => d.id === prev.outputDeviceId) ? prev.outputDeviceId : outputs[0].id,
+        }))
+      }
     } catch {
-      setDevices(fallbackDevices)
+      setInputDevices(fallbackInputDevices)
+      setOutputDevices(fallbackOutputDevices)
     }
   }
 
@@ -371,15 +406,24 @@ function App() {
     ;(async () => {
       try {
         const inputs = await listAudioInputDevices()
+        const outputs = await listAudioOutputDevices()
         if (inputs.length > 0) {
-          setDevices(inputs)
+          setInputDevices(inputs)
           setSettings((prev) => ({
             ...prev,
             inputDeviceId: inputs.some((d) => d.id === prev.inputDeviceId) ? prev.inputDeviceId : inputs[0].id,
           }))
         }
+        if (outputs.length > 0) {
+          setOutputDevices(outputs)
+          setSettings((prev) => ({
+            ...prev,
+            outputDeviceId: outputs.some((d) => d.id === prev.outputDeviceId) ? prev.outputDeviceId : outputs[0].id,
+          }))
+        }
       } catch {
-        setDevices(fallbackDevices)
+        setInputDevices(fallbackInputDevices)
+        setOutputDevices(fallbackOutputDevices)
       }
     })()
   }, [])
@@ -389,6 +433,23 @@ function App() {
       alertAudioGainRef.current.gain.value = alertGainFromPercent(settings.alertVolumePercent)
     }
   }, [settings.alertVolumePercent])
+
+  // Update output device when changed
+  useEffect(() => {
+    const audio = alertAudioRef.current
+    const context = alertAudioContextRef.current
+    const deviceId = settings.outputDeviceId
+
+    if (audio && 'setSinkId' in audio && deviceId && deviceId !== 'default') {
+      (audio as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId(deviceId)
+        .catch(() => { /* Ignore errors */ })
+    }
+
+    if (context && 'setSinkId' in context && deviceId && deviceId !== 'default') {
+      (context as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId(deviceId)
+        .catch(() => { /* Ignore errors */ })
+    }
+  }, [settings.outputDeviceId])
 
   // Persist snapshot on an interval to avoid blocking the UI/audio loop.
   useEffect(() => {
@@ -696,7 +757,13 @@ function App() {
               label={copy.inputDevice}
               value={settings.inputDeviceId}
               onChange={(value) => setSettings((prev) => ({ ...prev, inputDeviceId: value }))}
-              options={devices.map((device) => ({ value: device.id, label: device.label }))}
+              options={inputDevices.map((device) => ({ value: device.id, label: device.label }))}
+            />
+            <SelectRow
+              label={copy.outputDevice}
+              value={settings.outputDeviceId}
+              onChange={(value) => setSettings((prev) => ({ ...prev, outputDeviceId: value }))}
+              options={outputDevices.map((device) => ({ value: device.id, label: device.label }))}
             />
             <button className="secondaryButton" type="button" onClick={refreshDevices}>
               {copy.refreshDevices}

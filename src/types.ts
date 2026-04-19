@@ -8,6 +8,7 @@ export type DeviceOption = {
 
 export type MonitoringSettings = {
   inputDeviceId: string
+  outputDeviceId: string
   alertAudioName: string
   alertAudioPath: string
   alertVolumePercent: number
