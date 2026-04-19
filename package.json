@@ -56,7 +56,10 @@
     },
     "win": {
       "target": "nsis",
-      "executableName": "noise-watch-desktop"
+      "executableName": "noise-watch-desktop",
+      "forceCodeSigning": false,
+      "cscLink": "",
+      "cscKeyPassword": ""
     },
     "nsis": {
       "oneClick": false,

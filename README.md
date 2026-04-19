@@ -189,6 +189,7 @@ npm run build
 
 ### 打包桌面应用
 
+PS::打包时需要管理员权限
 ```bash
 npm run dist
 ```
