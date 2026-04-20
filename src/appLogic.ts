@@ -27,6 +27,8 @@ export function defaultSettings(): MonitoringSettings {
   return {
     inputDeviceId: 'default',
     outputDeviceId: 'default',
+    autoRecordingEnabled: false,
+    recordingSavePath: '',
     alertAudioName: '',
     alertAudioPath: '',
     alertVolumePercent: 100,

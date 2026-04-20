@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   bandToPercent,
@@ -31,7 +31,7 @@ const fallbackOutputDevices: DeviceOption[] = [
 
 const maxLogs = 200
 const waveformHistoryLength = 48
-const waveformUpdateInterval = 4
+const monitoringUiUpdateIntervalMs = 80
 const alertAudioLoadTimeoutMs = 5000
 const defaultAlertToneStepMs = 140
 const defaultAlertToneSequence = [880, 1175, 1568]
@@ -55,7 +55,7 @@ function App() {
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [lastJsonPath, setLastJsonPath] = useState('')
   const [lastCsvPath, setLastCsvPath] = useState('')
-  const [, setWaveformVersion] = useState(0)
+  const [waveformVersion, setWaveformVersion] = useState(0)
 
   const settingsRef = useRef(settings)
   const statsRef = useRef(stats)
@@ -79,7 +79,12 @@ function App() {
   const alertToneTimeoutsRef = useRef<number[]>([])
   const alertToneOscillatorsRef = useRef<OscillatorNode[]>([])
   const waveformHistoryRef = useRef<number[]>(createEmptyWaveformHistory())
-  const waveformFrameCountRef = useRef(0)
+  const waveformWriteIndexRef = useRef(0)
+  const lastMonitoringUiUpdateRef = useRef(0)
+  const isRecordingRef = useRef(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const recordingStopTimerRef = useRef<number | null>(null)
 
   const copy = useMemo(() => t(settings.language), [settings.language])
   const bandOptions = [
@@ -94,17 +99,13 @@ function App() {
 
   const resetWaveformHistory = useCallback(() => {
     waveformHistoryRef.current = createEmptyWaveformHistory()
-    waveformFrameCountRef.current = 0
+    waveformWriteIndexRef.current = 0
     setWaveformVersion((version) => version + 1)
   }, [])
 
   useEffect(() => {
     settingsRef.current = settings
   }, [settings])
-
-  useEffect(() => {
-    statsRef.current = stats
-  }, [stats])
 
   const stopDefaultAlertTone = useCallback(() => {
     alertToneTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
@@ -522,9 +523,26 @@ function App() {
       audioContextRef.current = null
     }
 
+    // Stop any ongoing recording
+    isRecordingRef.current = false
+    if (recordingStopTimerRef.current !== null) {
+      window.clearTimeout(recordingStopTimerRef.current)
+      recordingStopTimerRef.current = null
+    }
+    recordedChunksRef.current = []
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+    mediaRecorderRef.current = null
+
     impactTimesRef.current = []
     lastAboveThresholdRef.current = false
     startTimeRef.current = null
+    lastMonitoringUiUpdateRef.current = 0
+    statsRef.current = createInitialStats(settingsRef.current.language)
+    startTransition(() => {
+      setStats({ ...statsRef.current })
+    })
   }, [resetWaveformHistory])
 
   useEffect(() => {
@@ -567,6 +585,201 @@ function App() {
     }
   }
 
+  async function handleChooseRecordingDirectory() {
+    const picked = await window.desktopAPI?.chooseRecordingDirectory?.()
+    if (picked != null) {
+      setSettings((prev) => ({
+        ...prev,
+        recordingSavePath: picked,
+      }))
+    }
+  }
+
+  function pad2(n: number): string {
+    return n.toString().padStart(2, '0')
+  }
+
+  function getPreferredRecordingFormat() {
+    if (typeof MediaRecorder === 'undefined') {
+      return null
+    }
+
+    const candidates = [
+      { mimeType: 'audio/webm;codecs=opus', extension: 'webm' },
+      { mimeType: 'audio/ogg;codecs=opus', extension: 'ogg' },
+      { mimeType: 'audio/webm', extension: 'webm' },
+      { mimeType: 'audio/ogg', extension: 'ogg' },
+    ]
+
+    for (const candidate of candidates) {
+      if (MediaRecorder.isTypeSupported(candidate.mimeType)) {
+        return candidate
+      }
+    }
+
+    return { mimeType: '', extension: 'webm' }
+  }
+
+  async function finishRecording(peakDb: number) {
+    const chunks = recordedChunksRef.current
+    recordedChunksRef.current = []
+    mediaRecorderRef.current = null
+    if (recordingStopTimerRef.current !== null) {
+      window.clearTimeout(recordingStopTimerRef.current)
+      recordingStopTimerRef.current = null
+    }
+
+    if (chunks.length === 0) {
+      throw new Error('录音数据为空')
+    }
+
+    const format = getPreferredRecordingFormat()
+    const extension = format?.extension ?? 'webm'
+
+    const now = new Date()
+    const timestamp = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`
+    const fileName = `${Math.round(peakDb)}_${timestamp}.${extension}`
+
+    const blob = new Blob(chunks, {
+      type: format?.mimeType || chunks[0]?.type || 'application/octet-stream',
+    })
+    const buffer = new Uint8Array(await blob.arrayBuffer())
+
+    const result = await window.desktopAPI?.saveRecordingFile?.({
+      buffer: Array.from(buffer),
+      fileName,
+      savePath: settingsRef.current.recordingSavePath,
+    })
+
+    const currentSettings = settingsRef.current
+
+    if (result?.success) {
+      pushLog(
+        createLogEvent({
+          band: currentSettings.frequencyBand,
+          peakDb,
+          selectedBandDb: peakDb,
+          threshold: currentSettings.threshold,
+          impactCount: 0,
+          triggered: true,
+          messageZh: `${copy.recordingSaved}: ${fileName}`,
+          messageEn: `${copy.recordingSaved}: ${fileName}`,
+        }),
+      )
+      return
+    }
+
+    throw new Error(result?.error || copy.recordingFailed)
+  }
+
+  function startFixedLengthRecording(currentDb: number) {
+    const stream = streamRef.current
+    if (!stream || isRecordingRef.current) return
+
+    const format = getPreferredRecordingFormat()
+    if (!format) {
+      const currentSettings = settingsRef.current
+      pushLog(
+        createLogEvent({
+          band: currentSettings.frequencyBand,
+          peakDb: currentDb,
+          selectedBandDb: currentDb,
+          threshold: currentSettings.threshold,
+          impactCount: 0,
+          triggered: false,
+          messageZh: `${copy.recordingFailed}: 当前环境不支持 MediaRecorder。`,
+          messageEn: `${copy.recordingFailed}: MediaRecorder is not supported in this environment.`,
+        }),
+      )
+      return
+    }
+
+    isRecordingRef.current = true
+    recordedChunksRef.current = []
+
+    try {
+      const recorder = format.mimeType
+        ? new MediaRecorder(stream, {
+          mimeType: format.mimeType,
+          audioBitsPerSecond: 256000,
+        })
+        : new MediaRecorder(stream, {
+          audioBitsPerSecond: 256000,
+        })
+
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onerror = (event) => {
+        isRecordingRef.current = false
+        recordedChunksRef.current = []
+        mediaRecorderRef.current = null
+        if (recordingStopTimerRef.current !== null) {
+          window.clearTimeout(recordingStopTimerRef.current)
+          recordingStopTimerRef.current = null
+        }
+        console.error('[Recording]', event)
+      }
+
+      recorder.onstop = () => {
+        const shouldSave = isRecordingRef.current
+        isRecordingRef.current = false
+        if (!shouldSave) {
+          recordedChunksRef.current = []
+          mediaRecorderRef.current = null
+          return
+        }
+
+        void finishRecording(currentDb).catch((error) => {
+          const currentSettings = settingsRef.current
+          pushLog(
+            createLogEvent({
+              band: currentSettings.frequencyBand,
+              peakDb: currentDb,
+              selectedBandDb: currentDb,
+              threshold: currentSettings.threshold,
+              impactCount: 0,
+              triggered: false,
+              messageZh: `${copy.recordingFailed}: ${error}`,
+              messageEn: `${copy.recordingFailed}: ${error}`,
+            }),
+          )
+          console.error('[Recording]', error)
+        })
+      }
+
+      recorder.start(1000)
+      recordingStopTimerRef.current = window.setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop()
+        }
+      }, 10000)
+    } catch (error) {
+      isRecordingRef.current = false
+      recordedChunksRef.current = []
+      mediaRecorderRef.current = null
+      const currentSettings = settingsRef.current
+      pushLog(
+        createLogEvent({
+          band: currentSettings.frequencyBand,
+          peakDb: currentDb,
+          selectedBandDb: currentDb,
+          threshold: currentSettings.threshold,
+          impactCount: 0,
+          triggered: false,
+          messageZh: `${copy.recordingFailed}: ${error}`,
+          messageEn: `${copy.recordingFailed}: ${error}`,
+        }),
+      )
+      console.error('[Recording]', error)
+    }
+  }
+
   async function startMonitoring() {
     stopMonitoring()
 
@@ -598,6 +811,21 @@ function App() {
       lastAboveThresholdRef.current = false
       cooldownUntilRef.current = 0
       startTimeRef.current = performance.now()
+      lastMonitoringUiUpdateRef.current = 0
+      statsRef.current = {
+        ...statsRef.current,
+        triggerCount: statsRef.current.triggerCount,
+        lastEventAt: statsRef.current.lastEventAt,
+        elapsedSeconds: 0,
+        impactCount: 0,
+        lowBandDb: -120,
+        midBandDb: -120,
+        highBandDb: -120,
+        peakDb: -120,
+        selectedBandDb: -120,
+        statusTextZh: '监听中',
+        statusTextEn: 'Listening',
+      }
       setIsMonitoring(true)
 
       const frequencyData = new Float32Array(analyser.frequencyBinCount)
@@ -617,10 +845,11 @@ function App() {
         const now = performance.now()
         const windowMs = currentSettings.timeWindowSeconds * 1000
 
-        waveformHistoryRef.current = [...waveformHistoryRef.current.slice(-(waveformHistoryLength - 1)), selectedPercent]
-        waveformFrameCountRef.current += 1
+        waveformHistoryRef.current[waveformWriteIndexRef.current] = selectedPercent
+        waveformWriteIndexRef.current = (waveformWriteIndexRef.current + 1) % waveformHistoryLength
 
         impactTimesRef.current = impactTimesRef.current.filter((ts) => now - ts <= windowMs)
+        const liveStats = statsRef.current
 
         if (selectedDb >= currentSettings.threshold) {
           if (!lastAboveThresholdRef.current) {
@@ -645,9 +874,20 @@ function App() {
 
             pushLog(log)
 
+            // Trigger auto-recording if enabled, not already recording, and have save path
+            if (
+              currentSettings.autoRecordingEnabled &&
+              !isRecordingRef.current &&
+              currentSettings.recordingSavePath
+            ) {
+              startFixedLengthRecording(selectedDb)
+            }
+
             if (triggered) {
               cooldownUntilRef.current = now + currentSettings.cooldownSeconds * 1000
               impactTimesRef.current = []
+              liveStats.triggerCount += 1
+              liveStats.lastEventAt = log.timestamp
               void playAlertAudio().catch(async () => {
                 await invalidateAlertAudio()
                 pushLog(
@@ -663,11 +903,6 @@ function App() {
                   }),
                 )
               })
-              setStats((prev) => ({
-                ...prev,
-                triggerCount: prev.triggerCount + 1,
-                lastEventAt: log.timestamp,
-              }))
             }
           }
           lastAboveThresholdRef.current = true
@@ -675,23 +910,24 @@ function App() {
           lastAboveThresholdRef.current = false
         }
 
-        setStats((prev) => ({
-          ...prev,
-          lowBandDb: levels.low,
-          midBandDb: levels.mid,
-          highBandDb: levels.high,
-          peakDb: levels.peak,
-          selectedBandDb: selectedDb,
-          impactCount: impactTimesRef.current.length,
-          elapsedSeconds: startTimeRef.current ? Math.floor((now - startTimeRef.current) / 1000) : prev.elapsedSeconds,
-          lastEventAt: prev.lastEventAt,
-          statusTextZh: '监听中',
-          statusTextEn: 'Listening',
-        }))
+        liveStats.lowBandDb = levels.low
+        liveStats.midBandDb = levels.mid
+        liveStats.highBandDb = levels.high
+        liveStats.peakDb = levels.peak
+        liveStats.selectedBandDb = selectedDb
+        liveStats.impactCount = impactTimesRef.current.length
+        liveStats.elapsedSeconds = startTimeRef.current
+          ? Math.floor((now - startTimeRef.current) / 1000)
+          : liveStats.elapsedSeconds
+        liveStats.statusTextZh = '监听中'
+        liveStats.statusTextEn = 'Listening'
 
-        if (waveformFrameCountRef.current >= waveformUpdateInterval) {
-          waveformFrameCountRef.current = 0
-          setWaveformVersion((version) => version + 1)
+        if (now - lastMonitoringUiUpdateRef.current >= monitoringUiUpdateIntervalMs) {
+          lastMonitoringUiUpdateRef.current = now
+          startTransition(() => {
+            setStats({ ...statsRef.current })
+            setWaveformVersion((version) => version + 1)
+          })
         }
 
         frameRef.current = requestAnimationFrame(tick)
@@ -723,6 +959,11 @@ function App() {
   const lowPercent = bandToPercent(stats.lowBandDb)
   const midPercent = bandToPercent(stats.midBandDb)
   const highPercent = bandToPercent(stats.highBandDb)
+  const waveformBars = useMemo(() => {
+    const history = waveformHistoryRef.current
+    const startIndex = waveformWriteIndexRef.current
+    return history.slice(startIndex).concat(history.slice(0, startIndex))
+  }, [waveformVersion])
 
   return (
     <div className="appShell">
@@ -768,6 +1009,37 @@ function App() {
             <button className="secondaryButton" type="button" onClick={refreshDevices}>
               {copy.refreshDevices}
             </button>
+          </div>
+        </SectionCard>
+
+        <SectionCard title={copy.autoRecording}>
+          <div className="recordingPanel">
+            <div className="enableRow">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.autoRecordingEnabled}
+                  onChange={(e) => setSettings((prev) => ({
+                    ...prev,
+                    autoRecordingEnabled: e.target.checked,
+                  }))}
+                />
+                {copy.enableAutoRecording}
+              </label>
+            </div>
+            <div className="pathRow">
+              <div className="fileField">
+                {settings.recordingSavePath || copy.noPathSelected}
+              </div>
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={handleChooseRecordingDirectory}
+                disabled={!settings.autoRecordingEnabled}
+              >
+                {copy.chooseDirectory}
+              </button>
+            </div>
           </div>
         </SectionCard>
 
@@ -906,7 +1178,7 @@ function App() {
         <SectionCard title={copy.charts}>
           <div className="chartPanel">
             <div className="chartPlaceholder waveformBars">
-              {waveformHistoryRef.current.map((height, index) => (
+              {waveformBars.map((height, index) => (
                 <div key={index} className="waveBar" style={{ height: `${height}%` }} />
               ))}
             </div>

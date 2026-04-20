@@ -95,6 +95,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 将缓存目录设置到 userData 下，解决 Windows 权限问题
+  const userDataPath = app.getPath('userData')
+  const cachePath = path.join(userDataPath, 'cache')
+  const gpuCachePath = path.join(userDataPath, 'gpu-cache')
+  ensureDir(cachePath)
+  ensureDir(gpuCachePath)
+  app.commandLine.appendSwitch('disk-cache-dir', cachePath)
+  app.commandLine.appendSwitch('gpu-cache-dir', gpuCachePath)
+
   ipcMain.handle('app:get-paths', () => {
     const userDataPath = app.getPath('userData')
     const exportDir = path.join(userDataPath, 'exports')
@@ -151,6 +160,32 @@ app.whenReady().then(() => {
     const filePath = path.join(exportDir, 'latest-events.csv')
     writeCsv(filePath, snapshot.logs ?? [])
     return { filePath }
+  })
+
+  ipcMain.handle('app:choose-recording-directory', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('app:save-recording-file', (_, { buffer, fileName, savePath }) => {
+    try {
+      ensureDir(savePath)
+      const filePath = path.join(savePath, fileName)
+      const uint8Buffer = Uint8Array.from(buffer)
+      fs.writeFileSync(filePath, uint8Buffer)
+      console.log('[Recording] Saved to', filePath)
+      return { success: true, filePath }
+    } catch (error) {
+      console.error('[Recording] Save failed:', error)
+      return { success: false, error: String(error) }
+    }
   })
 
   createWindow()

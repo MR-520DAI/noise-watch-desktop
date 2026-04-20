@@ -9,6 +9,8 @@ export type DeviceOption = {
 export type MonitoringSettings = {
   inputDeviceId: string
   outputDeviceId: string
+  autoRecordingEnabled: boolean
+  recordingSavePath: string
   alertAudioName: string
   alertAudioPath: string
   alertVolumePercent: number
@@ -67,6 +69,12 @@ declare global {
       chooseAlertAudio: () => Promise<{ filePath: string; fileName: string; audioUrl: string } | null>
       writeSnapshot: (snapshot: PersistenceSnapshot) => Promise<{ filePath: string }>
       exportCsv: (snapshot: PersistenceSnapshot) => Promise<{ filePath: string }>
+      chooseRecordingDirectory: () => Promise<string | null>
+      saveRecordingFile: (params: {
+        buffer: number[]
+        fileName: string
+        savePath: string
+      }) => Promise<{ success: boolean; filePath?: string; error?: string }>
     }
   }
 }
